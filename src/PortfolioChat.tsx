@@ -10,8 +10,9 @@ import {
 import './PortfolioChat.css'
 
 const WEBHOOK_URL =
-  'https://n8n-igyv.srv2004312.hstgr.cloud/webhook/1a969321-01e2-4124-9e4c-833e8f94bffa'
-const CALLBACK_URL = 'https://bot.rmzoinso.tech/api/callback'
+  import.meta.env.VITE_PORTFOLIO_CHAT_WEBHOOK_URL?.trim() ?? ''
+const CALLBACK_URL =
+  import.meta.env.VITE_PORTFOLIO_CHAT_CALLBACK_URL?.trim() ?? ''
 
 const SESSION_STORAGE_KEY = 'bassem-portfolio-chat-session-v1'
 const MESSAGES_STORAGE_KEY = 'bassem-portfolio-chat-messages-v1'
@@ -203,6 +204,7 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
   const inputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
+  const activeAbortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     try {
@@ -217,8 +219,20 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
     if (!isOpen) return
 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    inputRef.current?.focus()
   }, [isOpen, isLoading, messages])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    inputRef.current?.focus()
+  }, [isOpen])
+
+  useEffect(() => {
+    return () => {
+      activeAbortControllerRef.current?.abort()
+      activeAbortControllerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -236,6 +250,18 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
     const messageText = rawMessage.trim()
     if (!messageText || sendingRef.current) return
 
+    if (!WEBHOOK_URL || !CALLBACK_URL) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: createId(),
+          role: 'assistant',
+          content: 'المساعد غير متاح حاليًا بسبب عدم اكتمال إعدادات الاتصال. يرجى المحاولة لاحقًا.',
+        },
+      ])
+      return
+    }
+
     sendingRef.current = true
     setIsLoading(true)
     setInput('')
@@ -248,6 +274,7 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
     setMessages((current) => [...current, userMessage])
 
     const controller = new AbortController()
+    activeAbortControllerRef.current = controller
     const timeoutId = window.setTimeout(() => controller.abort(), 60000)
 
     try {
@@ -290,19 +317,25 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
         { id: createId(), role: 'assistant', content: assistantReply },
       ])
     } catch (error) {
-      const errorMessage =
-        error instanceof Error && error.name === 'AbortError'
-          ? 'استغرق الرد وقتًا أطول من المتوقع. جرّب إرسال رسالتك مرة أخرى.'
-          : 'تعذر الاتصال بالمساعد حاليًا. تأكد من اتصال الإنترنت وحاول مرة أخرى.'
+      // Skip state updates when the request was aborted by component unmount.
+      if (activeAbortControllerRef.current === controller) {
+        const errorMessage =
+          error instanceof Error && error.name === 'AbortError'
+            ? 'استغرق الرد وقتًا أطول من المتوقع. جرّب إرسال رسالتك مرة أخرى.'
+            : 'تعذر الاتصال بالمساعد حاليًا. تأكد من اتصال الإنترنت وحاول مرة أخرى.'
 
-      setMessages((current) => [
-        ...current,
-        { id: createId(), role: 'assistant', content: errorMessage },
-      ])
+        setMessages((current) => [
+          ...current,
+          { id: createId(), role: 'assistant', content: errorMessage },
+        ])
+      }
     } finally {
       window.clearTimeout(timeoutId)
-      sendingRef.current = false
-      setIsLoading(false)
+      if (activeAbortControllerRef.current === controller) {
+        activeAbortControllerRef.current = null
+        sendingRef.current = false
+        setIsLoading(false)
+      }
     }
   }
 
