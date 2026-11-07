@@ -1,0 +1,103 @@
+name: Build and Deploy Portfolio to Hostinger VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portfolio-production-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "package-lock.json is missing; using npm install. Commit a lockfile for reproducible builds."
+            npm install
+          fi
+
+      - name: Build Vite website
+        run: npm run build
+        env:
+          VITE_PORTFOLIO_CHAT_WEBHOOK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_WEBHOOK_URL }}
+          VITE_PORTFOLIO_CHAT_CALLBACK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_CALLBACK_URL }}
+
+      - name: Validate deployment settings
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_PORT: ${{ vars.VPS_PORT }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VITE_PORTFOLIO_CHAT_WEBHOOK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_WEBHOOK_URL }}
+          VITE_PORTFOLIO_CHAT_CALLBACK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_CALLBACK_URL }}
+        run: |
+          set -eu
+          for name in VPS_HOST VPS_PORT VPS_USER VPS_DEPLOY_PATH VPS_KNOWN_HOSTS VPS_SSH_PRIVATE_KEY VITE_PORTFOLIO_CHAT_WEBHOOK_URL VITE_PORTFOLIO_CHAT_CALLBACK_URL; do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              echo "Missing GitHub variable/secret: $name"
+              exit 1
+            fi
+          done
+          test -d dist
+          test -f dist/index.html
+
+      - name: Configure SSH
+        env:
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+        run: |
+          set -eu
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Create deployment directory
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_PORT: ${{ vars.VPS_PORT }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
+        run: |
+          set -eu
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -p "$VPS_PORT" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS_USER@$VPS_HOST" \
+            "mkdir -p '$VPS_DEPLOY_PATH'"
+
+      - name: Deploy dist to Hostinger VPS
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_PORT: ${{ vars.VPS_PORT }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
+        run: |
+          set -eu
+          rsync -az --delete \
+            --exclude='.well-known/' \
+            -e "ssh -i $HOME/.ssh/id_ed25519 -p $VPS_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
+            dist/ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/"
