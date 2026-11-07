@@ -9,13 +9,13 @@ import {
   Command,
   Mail,
   Menu,
-  MessageCircle,
   Phone,
   Sparkles,
   Workflow,
   X,
 } from 'lucide-react'
 import PortfolioVideo from './PortfolioVideo'
+import PortfolioChat from './PortfolioChat'
 import './App.css'
 
 const HeroScene = lazy(() => import('./HeroScene'))
@@ -36,11 +36,11 @@ function App() {
             <a href={bookingUrl}>احجز جلسة <ArrowUpLeft size={14} /></a>
           </p>
           <div className="top-contacts" dir="ltr">
-            <a href="mailto:rmz.tech@gmail.com"><Mail size={13} /> rmz.tech@gmail.com</a>
+            <a href="mailto:rmz.tech@gmail.com"><Mail size={13} /> rmz.tecar@gmail.com</a>
             <span className="top-divider" />
             <a href="tel:+966580598411"><Phone size={13} /> +966 58 059 8411</a>
             <span className="top-divider" />
-            <a className="social-link" href="https://www.facebook.com/profile.php?id=61571789743570&amp;locale=ar_AR" aria-label="Facebook">f</a>
+            <a className="social-link" href="https://www.facebook.com/profile.php?id=61571789743570&locale=ar_AR" aria-label="Facebook">f</a>
             <a className="social-link" href="https://www.instagram.com/rmz_oinso/" aria-label="Instagram">ig</a>
             <a className="social-link" href="https://www.youtube.com/@rmzoinso" aria-label="YouTube">▶</a>
           </div>
@@ -88,6 +88,7 @@ function App() {
                 <span className="proof-caption"><Check size={14} /> مصممة حول طريقة عملك</span>
               </div>
             </div>
+
             <div className="hero-art" aria-label="تكوين هندسي ثلاثي الأبعاد يرمز إلى أنظمة مترابطة" role="img">
               <div className="art-orbit orbit-one" />
               <div className="art-orbit orbit-two" />
@@ -137,7 +138,13 @@ function App() {
             <div className="solution-visual" aria-hidden="true">
               <div className="solution-window">
                 <div className="solution-window-top"><span /><span /><span /><b>مساعد البريد والمهام</b></div>
-                <div className="solution-flow"><div className="solution-flow-node"><Mail size={19} /><span>بريد وارد</span></div><i /><div className="solution-flow-node solution-flow-ai"><Bot size={21} /><span>فرز ذكي</span></div><i /><div className="solution-flow-node solution-flow-task"><Check size={20} /><span>مهمة منظمة</span></div></div>
+                <div className="solution-flow">
+                  <div className="solution-flow-node"><Mail size={19} /><span>بريد وارد</span></div>
+                  <i />
+                  <div className="solution-flow-node solution-flow-ai"><Bot size={21} /><span>فرز ذكي</span></div>
+                  <i />
+                  <div className="solution-flow-node solution-flow-task"><Check size={20} /><span>مهمة منظمة</span></div>
+                </div>
                 <div className="solution-status"><span className="live-pulse" /> النظام يعمل <span>آخر تحديث: الآن</span></div>
               </div>
               <span className="solution-orbit solution-orbit-one" /><span className="solution-orbit solution-orbit-two" />
@@ -173,7 +180,15 @@ function App() {
               <p>احجز جلستك التشغيلية الآن لنحدد معا فرص التوفير ومضاعفة إنتاجية شركتك.</p>
               <a className="button button-white" href={bookingUrl}>احجز الآن <ArrowUpRight size={16} /></a>
             </div>
-            <div className="contact-art" aria-hidden="true"><div className="contact-ring ring-a" /><div className="contact-ring ring-b" /><div className="contact-block block-a" /><div className="contact-block block-b" /><span className="contact-star star-a">✳</span><span className="contact-star star-b">✳</span><span className="contact-note">وقت أقل في المهام.<br /><b>أثر أكبر في النتائج.</b></span></div>
+            <div className="contact-art" aria-hidden="true">
+              <div className="contact-ring ring-a" />
+              <div className="contact-ring ring-b" />
+              <div className="contact-block block-a" />
+              <div className="contact-block block-b" />
+              <span className="contact-star star-a">✳</span>
+              <span className="contact-star star-b">✳</span>
+              <span className="contact-note">وقت أقل في المهام.<br /><b>أثر أكبر في النتائج.</b></span>
+            </div>
           </div>
         </section>
       </main>
@@ -185,9 +200,9 @@ function App() {
             <p>تحويل الاختناقات التشغيلية إلى أنظمة أتمتة تعمل بدقة على مدار الساعة.</p>
           </div>
           <div className="footer-contact">
-            <a href="mailto:rmz.tech@gmail.com"><Mail size={15} /> rmz.tech@gmail.com</a>
+            <a href="mailto:rmz.tech@gmail.com"><Mail size={15} /> rmz.tecar@gmail.com</a>
             <div className="footer-socials" dir="ltr">
-              <a className="social-link" href="https://www.facebook.com/profile.php?id=61571789743570&amp;locale=ar_AR" aria-label="Facebook">f</a>
+              <a className="social-link" href="https://www.facebook.com/profile.php?id=61571789743570&locale=ar_AR" aria-label="Facebook">f</a>
               <a className="social-link" href="https://www.instagram.com/rmz_oinso/" aria-label="Instagram">ig</a>
               <a className="social-link" href="https://www.youtube.com/@rmzoinso" aria-label="YouTube">▶</a>
             </div>
@@ -196,9 +211,7 @@ function App() {
         </div>
       </footer>
 
-      <div className="chat-dock">
-        <a className="chat-launcher" href={bookingUrl} aria-label="تحدث معي عبر واتساب"><MessageCircle size={23} /><span>لنتحدث</span></a>
-      </div>
+      <PortfolioChat />
     </>
   )
 }
