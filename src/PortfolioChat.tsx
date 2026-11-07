@@ -206,27 +206,38 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
   const sendingRef = useRef(false)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
 
+  
+  // حفظ المحادثة والجلسة
   useEffect(() => {
     try {
       window.sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId)
-      window.sessionStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messages))
+      window.sessionStorage.setItem(
+        MESSAGES_STORAGE_KEY,
+        JSON.stringify(messages),
+      )
     } catch {
-      // Chat remains usable when browser storage is unavailable or full.
+      // Chat remains usable when storage is unavailable.
     }
   }, [messages, sessionId])
 
+  // التمرير إلى آخر رسالة
   useEffect(() => {
     if (!isOpen) return
 
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end',
+    })
   }, [isOpen, isLoading, messages])
 
+  // التركيز على حقل الكتابة بعد فتح الشات أو انتهاء التحميل
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || isLoading) return
 
     inputRef.current?.focus()
-  }, [isOpen])
+  }, [isOpen, isLoading])
 
+  // إلغاء الطلب النشط عند إزالة المكون
   useEffect(() => {
     return () => {
       activeAbortControllerRef.current?.abort()
@@ -234,16 +245,21 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
     }
   }, [])
 
-  useEffect(() => {
-    if (!isOpen) return
+useEffect(() => {
+  if (!isOpen) return
 
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onOpenChange(false)
+  const handleEscape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      onOpenChange(false)
     }
+  }
 
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [isOpen, onOpenChange])
+  window.addEventListener('keydown', handleEscape)
+
+  return () => {
+    window.removeEventListener('keydown', handleEscape)
+  }
+}, [isOpen, onOpenChange])
 
 
   async function sendMessage(rawMessage: string) {
@@ -333,8 +349,6 @@ export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatPro
       window.clearTimeout(timeoutId)
       if (activeAbortControllerRef.current === controller) {
         activeAbortControllerRef.current = null
-        sendingRef.current = false
-        setIsLoading(false)
       }
     }
   }
