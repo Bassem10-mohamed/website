@@ -189,8 +189,12 @@ function renderMessageContent(content: string) {
   return output
 }
 
-export default function PortfolioChat() {
-  const [isOpen, setIsOpen] = useState(false)
+type PortfolioChatProps = {
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export default function PortfolioChat({ isOpen, onOpenChange }: PortfolioChatProps) {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [sessionId, setSessionId] = useState(getInitialSessionId)
@@ -215,6 +219,17 @@ export default function PortfolioChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     inputRef.current?.focus()
   }, [isOpen, isLoading, messages])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onOpenChange(false)
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [isOpen, onOpenChange])
 
 
   async function sendMessage(rawMessage: string) {
@@ -426,7 +441,7 @@ export default function PortfolioChat() {
       <button
         className="portfolio-chat-launcher"
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => onOpenChange(!isOpen)}
         aria-expanded={isOpen}
         aria-controls="portfolio-chat-panel"
         aria-label="فتح أو إغلاق محادثة مساعد باسم الذكي"

@@ -9,6 +9,7 @@ import {
   Command,
   Mail,
   Menu,
+  MessageCircle,
   Phone,
   Sparkles,
   Workflow,
@@ -25,6 +26,7 @@ const latestAiNewsVideo = new URL('../the last news about ai and it.mp4', import
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
 
   return (
     <>
@@ -36,7 +38,7 @@ function App() {
             <a href={bookingUrl}>احجز جلسة <ArrowUpLeft size={14} /></a>
           </p>
           <div className="top-contacts" dir="ltr">
-            <a href="mailto:rmz.tech@gmail.com"><Mail size={13} /> rmz.tecar@gmail.com</a>
+            <a href="mailto:rmz.tech@gmail.com"><Mail size={13} /> rmz.tech@gmail.com</a>
             <span className="top-divider" />
             <a href="tel:+966580598411"><Phone size={13} /> +966 58 059 8411</a>
             <span className="top-divider" />
@@ -166,6 +168,57 @@ function App() {
             </div>
             <p className="section-intro">هذه هي المشاريع التي قدمناها للعملاء السابقين</p>
           </div>
+          <article className="portfolio-featured-card" aria-label="مشروع المساعد الذكي">
+            <div className="portfolio-featured-visual" aria-hidden="true">
+              <div className="portfolio-featured-glow portfolio-featured-glow-one" />
+              <div className="portfolio-featured-glow portfolio-featured-glow-two" />
+              <div className="portfolio-featured-preview">
+                <div className="portfolio-featured-preview-head">
+                  <span className="portfolio-featured-preview-icon"><Bot size={17} /></span>
+                  <span className="portfolio-featured-preview-title">
+                    <strong>مساعد باسم الذكي</strong>
+                    <small><i /> متاح لمساعدتك</small>
+                  </span>
+                  <Sparkles size={17} className="portfolio-featured-sparkle" />
+                </div>
+                <div className="portfolio-featured-preview-body">
+                  <div className="portfolio-preview-message portfolio-preview-user">
+                    أبحث عن طريقة لتطوير أعمالي وخدمة عملائي بشكل أفضل.
+                  </div>
+                  <div className="portfolio-preview-message portfolio-preview-assistant">
+                    يسعدني مساعدتك! دعنا نكتشف معًا الحلول المناسبة لاحتياجات عملك.
+                  </div>
+                  <div className="portfolio-preview-suggestions">
+                    <span>استكشاف الخدمات</span>
+                    <span>مشاهدة المشاريع</span>
+                  </div>
+                </div>
+                <div className="portfolio-featured-preview-input">
+                  <span>اكتب سؤالك هنا...</span>
+                  <span><MessageCircle size={14} /></span>
+                </div>
+              </div>
+              <span className="portfolio-featured-visual-label"><span /> تجربة تفاعلية مباشرة</span>
+            </div>
+
+            <div className="portfolio-featured-copy">
+              <span className="portfolio-featured-kicker"><Sparkles size={14} /> مشروع مميز من معرض الأعمال</span>
+              <h3>مساعد ذكي</h3>
+              <p>مساعد ذكي يتفاعل مع الزوار، ويجيب عن استفساراتهم حول الخدمات والمشاريع، ويساعد العملاء على اختيار الحلول المناسبة.</p>
+              <div className="portfolio-featured-benefit">
+                <span className="portfolio-featured-benefit-icon"><Check size={16} /></span>
+                <span>تجربة حوارية تساعد العميل على الوصول إلى ما يحتاجه واتخاذ الخطوة التالية بثقة.</span>
+              </div>
+              <button
+                className="portfolio-featured-cta"
+                type="button"
+                onClick={() => setChatOpen(true)}
+              >
+                جرّب المشروع الآن <ArrowUpLeft size={17} />
+              </button>
+            </div>
+          </article>
+
           <div className="portfolio-video-grid">
             <PortfolioVideo src={assistantBotVideo} title="my assistant bot" variant="assistant" />
             <PortfolioVideo src={latestAiNewsVideo} title="the last news about ai and it" variant="news" />
@@ -200,7 +253,7 @@ function App() {
             <p>تحويل الاختناقات التشغيلية إلى أنظمة أتمتة تعمل بدقة على مدار الساعة.</p>
           </div>
           <div className="footer-contact">
-            <a href="mailto:rmz.tech@gmail.com"><Mail size={15} /> rmz.tecar@gmail.com</a>
+            <a href="mailto:rmz.tech@gmail.com"><Mail size={15} /> rmz.tech@gmail.com</a>
             <div className="footer-socials" dir="ltr">
               <a className="social-link" href="https://www.facebook.com/profile.php?id=61571789743570&locale=ar_AR" aria-label="Facebook">f</a>
               <a className="social-link" href="https://www.instagram.com/rmz_oinso/" aria-label="Instagram">ig</a>
@@ -211,7 +264,7 @@ function App() {
         </div>
       </footer>
 
-      <PortfolioChat />
+      <PortfolioChat isOpen={chatOpen} onOpenChange={setChatOpen} />
     </>
   )
 }
