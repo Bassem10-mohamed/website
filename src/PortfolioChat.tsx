@@ -346,9 +346,12 @@ useEffect(() => {
         ])
       }
     } finally {
-      window.clearTimeout(timeoutId)
+         window.clearTimeout(timeoutId)
+
       if (activeAbortControllerRef.current === controller) {
         activeAbortControllerRef.current = null
+        sendingRef.current = false
+        setIsLoading(false)
       }
     }
   }
