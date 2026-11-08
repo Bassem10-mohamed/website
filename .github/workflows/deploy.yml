@@ -15,13 +15,13 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -50,11 +50,17 @@ jobs:
           test -n "$VPS_SSH_PRIVATE_KEY" || { echo 'Missing VPS_SSH_PRIVATE_KEY repository secret'; exit 1; }
           test -n "$VPS_KNOWN_HOSTS" || { echo 'Missing VPS_KNOWN_HOSTS repository variable'; exit 1; }
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          # Normalize Windows CRLF line endings before saving the private key.
+          printf '%s' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
-          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null
+          # Validate the key without printing any private material. Keep ssh-keygen's
+          # error message visible so a malformed/incorrect GitHub Secret is diagnosable.
+          if ! ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > "$HOME/.ssh/id_ed25519.pub"; then
+            echo "::error::VPS_SSH_PRIVATE_KEY is not a valid unencrypted OpenSSH private key. Re-copy the complete private key file into the GitHub Actions secret."
+            exit 1
+          fi
 
       - name: Upload build bundle
         env:
