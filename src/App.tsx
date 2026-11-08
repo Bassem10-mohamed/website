@@ -38,7 +38,7 @@ function App() {
             <a href={bookingUrl}>احجز جلسة <ArrowUpLeft size={14} /></a>
           </p>
           <div className="top-contacts" dir="ltr">
-            <a href="mailto:rmz.tech@gmail.com"><Mail size={13} /> rmz.tech@gmail.com</a>
+            <a href="mailto:rmz.tecar@gmail.com"><Mail size={13} /> rmz.tech@gmail.com</a>
             <span className="top-divider" />
             <a href="tel:+966580598411"><Phone size={13} /> +966 58 059 8411</a>
             <span className="top-divider" />
@@ -253,7 +253,7 @@ function App() {
             <p>تحويل الاختناقات التشغيلية إلى أنظمة أتمتة تعمل بدقة على مدار الساعة.</p>
           </div>
           <div className="footer-contact">
-            <a href="mailto:rmz.tech@gmail.com"><Mail size={15} /> rmz.tech@gmail.com</a>
+            <a href="mailto:rmz.tecar@gmail.com"><Mail size={15} /> rmz.tech@gmail.com</a>
             <div className="footer-socials" dir="ltr">
               <a className="social-link" href="https://www.facebook.com/profile.php?id=61571789743570&locale=ar_AR" aria-label="Facebook">f</a>
               <a className="social-link" href="https://www.instagram.com/rmz_oinso/" aria-label="Instagram">ig</a>
