@@ -44,23 +44,37 @@ jobs:
 
       - name: Configure SSH
         env:
-          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_SSH_PRIVATE_KEY_B64: ${{ secrets.VPS_SSH_PRIVATE_KEY_B64 }}
           VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
         run: |
-          test -n "$VPS_SSH_PRIVATE_KEY" || { echo 'Missing VPS_SSH_PRIVATE_KEY repository secret'; exit 1; }
-          test -n "$VPS_KNOWN_HOSTS" || { echo 'Missing VPS_KNOWN_HOSTS repository variable'; exit 1; }
+          set -e
+
+          test -n "$VPS_SSH_PRIVATE_KEY_B64" || {
+            echo "::error::Missing VPS_SSH_PRIVATE_KEY_B64 secret"
+            exit 1
+          }
+
+          test -n "$VPS_KNOWN_HOSTS" || {
+            echo "::error::Missing VPS_KNOWN_HOSTS variable"
+            exit 1
+          }
+
           install -m 700 -d "$HOME/.ssh"
-          # Normalize Windows CRLF line endings before saving the private key.
-          printf '%s' "$VPS_SSH_PRIVATE_KEY" | tr -d '\r' > "$HOME/.ssh/id_ed25519"
+
+          printf '%s' "$VPS_SSH_PRIVATE_KEY_B64" \
+            | base64 --decode > "$HOME/.ssh/id_ed25519"
+
           chmod 600 "$HOME/.ssh/id_ed25519"
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-          # Validate the key without printing any private material. Keep ssh-keygen's
-          # error message visible so a malformed/incorrect GitHub Secret is diagnosable.
-          if ! ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > "$HOME/.ssh/id_ed25519.pub"; then
-            echo "::error::VPS_SSH_PRIVATE_KEY is not a valid unencrypted OpenSSH private key. Re-copy the complete private key file into the GitHub Actions secret."
+
+          if ! ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null; then
+            echo "::error::Decoded SSH private key is invalid"
             exit 1
           fi
+
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+          echo "SSH key configured successfully."
 
       - name: Upload build bundle
         env:
