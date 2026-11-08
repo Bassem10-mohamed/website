@@ -1,8 +1,18 @@
 services:
   portfolio:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Reuse the existing locally-built image so its current Nginx config and
+    # healthcheck stay intact. GitHub Actions builds the Vite dist directory.
+    image: website-portfolio:latest
+    pull_policy: never
     restart: unless-stopped
+    volumes:
+      - ./deploy/current:/usr/share/nginx/html:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=website_default"
+      - "traefik.http.routers.website.rule=Host(`rmzoinso.tech`) || Host(`www.rmzoinso.tech`)"
+      - "traefik.http.routers.website.entrypoints=websecure"
+      - "traefik.http.routers.website.tls.certresolver=letsencrypt"
+      - "traefik.http.services.website.loadbalancer.server.port=80"
     ports:
       - "${WEB_PORT:-8080}:80"

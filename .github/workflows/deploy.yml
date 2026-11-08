@@ -1,4 +1,4 @@
-name: Build and Deploy Portfolio to Hostinger VPS
+name: Build and deploy portfolio to Hostinger VPS
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: portfolio-production-deploy
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
@@ -20,84 +20,130 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            echo "package-lock.json is missing; using npm install. Commit a lockfile for reproducible builds."
-            npm install
-          fi
+        run: npm ci
 
-      - name: Build Vite website
-        run: npm run build
+      - name: Build Vite application
         env:
           VITE_PORTFOLIO_CHAT_WEBHOOK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_WEBHOOK_URL }}
           VITE_PORTFOLIO_CHAT_CALLBACK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_CALLBACK_URL }}
-
-      - name: Validate deployment settings
-        env:
-          VPS_HOST: ${{ vars.VPS_HOST }}
-          VPS_PORT: ${{ vars.VPS_PORT }}
-          VPS_USER: ${{ vars.VPS_USER }}
-          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
-          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
-          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
-          VITE_PORTFOLIO_CHAT_WEBHOOK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_WEBHOOK_URL }}
-          VITE_PORTFOLIO_CHAT_CALLBACK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_CALLBACK_URL }}
         run: |
-          set -eu
-          for name in VPS_HOST VPS_PORT VPS_USER VPS_DEPLOY_PATH VPS_KNOWN_HOSTS VPS_SSH_PRIVATE_KEY VITE_PORTFOLIO_CHAT_WEBHOOK_URL VITE_PORTFOLIO_CHAT_CALLBACK_URL; do
-            eval "value=\${$name:-}"
-            if [ -z "$value" ]; then
-              echo "Missing GitHub variable/secret: $name"
-              exit 1
-            fi
-          done
-          test -d dist
-          test -f dist/index.html
+          test -n "$VITE_PORTFOLIO_CHAT_WEBHOOK_URL" || { echo 'Missing VITE_PORTFOLIO_CHAT_WEBHOOK_URL repository variable'; exit 1; }
+          test -n "$VITE_PORTFOLIO_CHAT_CALLBACK_URL" || { echo 'Missing VITE_PORTFOLIO_CHAT_CALLBACK_URL repository variable'; exit 1; }
+          npm run build
+          test -s dist/index.html
+
+      - name: Package static build
+        run: tar -czf portfolio-dist.tar.gz -C dist .
 
       - name: Configure SSH
         env:
-          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
           VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
         run: |
-          set -eu
+          test -n "$VPS_SSH_PRIVATE_KEY" || { echo 'Missing VPS_SSH_PRIVATE_KEY repository secret'; exit 1; }
+          test -n "$VPS_KNOWN_HOSTS" || { echo 'Missing VPS_KNOWN_HOSTS repository variable'; exit 1; }
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 644 "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null
 
-      - name: Create deployment directory
+      - name: Upload build bundle
         env:
           VPS_HOST: ${{ vars.VPS_HOST }}
           VPS_PORT: ${{ vars.VPS_PORT }}
           VPS_USER: ${{ vars.VPS_USER }}
-          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
         run: |
-          set -eu
+          test -n "$VPS_HOST" || { echo 'Missing VPS_HOST repository variable'; exit 1; }
+          test -n "$VPS_PORT" || { echo 'Missing VPS_PORT repository variable'; exit 1; }
+          test -n "$VPS_USER" || { echo 'Missing VPS_USER repository variable'; exit 1; }
+          scp -i "$HOME/.ssh/id_ed25519" \
+            -P "$VPS_PORT" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            portfolio-dist.tar.gz \
+            "$VPS_USER@$VPS_HOST:/home/$VPS_USER/portfolio-dist-$GITHUB_SHA.tar.gz"
+
+      - name: Activate release and verify website
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_PORT: ${{ vars.VPS_PORT }}
+          VPS_USER: ${{ vars.VPS_USER }}
+        run: |
           ssh -i "$HOME/.ssh/id_ed25519" \
             -p "$VPS_PORT" \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$VPS_USER@$VPS_HOST" \
-            "mkdir -p '$VPS_DEPLOY_PATH'"
+            "bash -s -- '$GITHUB_SHA' '$VPS_USER'" <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
 
-      - name: Deploy dist to Hostinger VPS
-        env:
-          VPS_HOST: ${{ vars.VPS_HOST }}
-          VPS_PORT: ${{ vars.VPS_PORT }}
-          VPS_USER: ${{ vars.VPS_USER }}
-          VPS_DEPLOY_PATH: ${{ vars.VPS_DEPLOY_PATH }}
-        run: |
-          set -eu
-          rsync -az --delete \
-            --exclude='.well-known/' \
-            -e "ssh -i $HOME/.ssh/id_ed25519 -p $VPS_PORT -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" \
-            dist/ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/"
+          RELEASE_ID="$1"
+          DEPLOY_USER="$2"
+          BASE="/docker/website/deploy"
+          RELEASE="$BASE/releases/$RELEASE_ID"
+          ARCHIVE="/home/$DEPLOY_USER/portfolio-dist-$RELEASE_ID.tar.gz"
+          CURRENT="$BASE/current"
+          NEXT_LINK="$BASE/current.next"
+
+          test -s "$ARCHIVE"
+          mkdir -p "$RELEASE"
+          tar -xzf "$ARCHIVE" -C "$RELEASE"
+          test -s "$RELEASE/index.html"
+
+          # Keep a copy of the currently served files for first-deploy rollback.
+          if [ ! -s "$BASE/bootstrap/index.html" ]; then
+            mkdir -p "$BASE/bootstrap"
+            docker cp website-portfolio-1:/usr/share/nginx/html/. "$BASE/bootstrap/"
+          fi
+
+          PREVIOUS="$(readlink "$CURRENT" 2>/dev/null || true)"
+          if [ -z "$PREVIOUS" ]; then
+            PREVIOUS="$BASE/bootstrap"
+          fi
+
+          rollback() {
+            echo 'Deployment health check failed; restoring previous release.' >&2
+            rm -f "$NEXT_LINK"
+            ln -s "$PREVIOUS" "$NEXT_LINK"
+            mv -Tf "$NEXT_LINK" "$CURRENT"
+            cd /docker/website
+            docker compose up -d --no-build --pull never --force-recreate portfolio || true
+            docker logs --tail 80 website-portfolio-1 || true
+          }
+
+          rm -f "$NEXT_LINK"
+          ln -s "$RELEASE" "$NEXT_LINK"
+          mv -Tf "$NEXT_LINK" "$CURRENT"
+
+          cd /docker/website
+          if ! docker compose up -d --no-build --pull never --force-recreate portfolio; then
+            rollback
+            exit 1
+          fi
+
+          HEALTH=''
+          for attempt in $(seq 1 30); do
+            HEALTH="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' website-portfolio-1 2>/dev/null || true)"
+            if [ "$HEALTH" = 'healthy' ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [ "$HEALTH" != 'healthy' ]; then
+            rollback
+            exit 1
+          fi
+
+          rm -f "$ARCHIVE"
+          echo "Deployment successful: $RELEASE_ID"
+          REMOTE_SCRIPT
