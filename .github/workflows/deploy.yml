@@ -1,169 +1,41 @@
-name: Build and deploy portfolio to Hostinger VPS
+name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: portfolio-production-deploy
-  cancel-in-progress: false
+  pages: write
+  id-token: write
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-24.04
+  build:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
-
+          node-version: 20
       - name: Install dependencies
-        run: npm ci
+        run: npm install
+      - name: Build
+        run: npm run build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
 
-      - name: Build Vite application
-        env:
-          VITE_PORTFOLIO_CHAT_WEBHOOK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_WEBHOOK_URL }}
-          VITE_PORTFOLIO_CHAT_CALLBACK_URL: ${{ vars.VITE_PORTFOLIO_CHAT_CALLBACK_URL }}
-        run: |
-          test -n "$VITE_PORTFOLIO_CHAT_WEBHOOK_URL" || { echo 'Missing VITE_PORTFOLIO_CHAT_WEBHOOK_URL repository variable'; exit 1; }
-          test -n "$VITE_PORTFOLIO_CHAT_CALLBACK_URL" || { echo 'Missing VITE_PORTFOLIO_CHAT_CALLBACK_URL repository variable'; exit 1; }
-          npm run build
-          test -s dist/index.html
-
-      - name: Package static build
-        run: tar -czf portfolio-dist.tar.gz -C dist .
-
-      - name: Configure SSH
-        env:
-          VPS_SSH_PRIVATE_KEY_B64: ${{ secrets.VPS_SSH_PRIVATE_KEY_B64 }}
-          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
-        run: |
-          set -e
-
-          test -n "$VPS_SSH_PRIVATE_KEY_B64" || {
-            echo "::error::Missing VPS_SSH_PRIVATE_KEY_B64 secret"
-            exit 1
-          }
-
-          test -n "$VPS_KNOWN_HOSTS" || {
-            echo "::error::Missing VPS_KNOWN_HOSTS variable"
-            exit 1
-          }
-
-          install -m 700 -d "$HOME/.ssh"
-
-          printf '%s' "$VPS_SSH_PRIVATE_KEY_B64" \
-            | base64 --decode > "$HOME/.ssh/id_ed25519"
-
-          chmod 600 "$HOME/.ssh/id_ed25519"
-
-          if ! ssh-keygen -y -f "$HOME/.ssh/id_ed25519" > /dev/null; then
-            echo "::error::Decoded SSH private key is invalid"
-            exit 1
-          fi
-
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-
-          echo "SSH key configured successfully."
-
-      - name: Upload build bundle
-        env:
-          VPS_HOST: ${{ vars.VPS_HOST }}
-          VPS_PORT: ${{ vars.VPS_PORT }}
-          VPS_USER: ${{ vars.VPS_USER }}
-        run: |
-          test -n "$VPS_HOST" || { echo 'Missing VPS_HOST repository variable'; exit 1; }
-          test -n "$VPS_PORT" || { echo 'Missing VPS_PORT repository variable'; exit 1; }
-          test -n "$VPS_USER" || { echo 'Missing VPS_USER repository variable'; exit 1; }
-          scp -i "$HOME/.ssh/id_ed25519" \
-            -P "$VPS_PORT" \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            portfolio-dist.tar.gz \
-            "$VPS_USER@$VPS_HOST:/home/$VPS_USER/portfolio-dist-$GITHUB_SHA.tar.gz"
-
-      - name: Activate release and verify website
-        env:
-          VPS_HOST: ${{ vars.VPS_HOST }}
-          VPS_PORT: ${{ vars.VPS_PORT }}
-          VPS_USER: ${{ vars.VPS_USER }}
-        run: |
-          ssh -i "$HOME/.ssh/id_ed25519" \
-            -p "$VPS_PORT" \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "$VPS_USER@$VPS_HOST" \
-            "bash -s -- '$GITHUB_SHA' '$VPS_USER'" <<'REMOTE_SCRIPT'
-          set -Eeuo pipefail
-
-          RELEASE_ID="$1"
-          DEPLOY_USER="$2"
-          BASE="/docker/website/deploy"
-          RELEASE="$BASE/releases/$RELEASE_ID"
-          ARCHIVE="/home/$DEPLOY_USER/portfolio-dist-$RELEASE_ID.tar.gz"
-          CURRENT="$BASE/current"
-          NEXT_LINK="$BASE/current.next"
-
-          test -s "$ARCHIVE"
-          mkdir -p "$RELEASE"
-          tar -xzf "$ARCHIVE" -C "$RELEASE"
-          test -s "$RELEASE/index.html"
-
-          # Keep a copy of the currently served files for first-deploy rollback.
-          if [ ! -s "$BASE/bootstrap/index.html" ]; then
-            mkdir -p "$BASE/bootstrap"
-            docker cp website-portfolio-1:/usr/share/nginx/html/. "$BASE/bootstrap/"
-          fi
-
-          PREVIOUS="$(readlink "$CURRENT" 2>/dev/null || true)"
-          if [ -z "$PREVIOUS" ]; then
-            PREVIOUS="$BASE/bootstrap"
-          fi
-
-          rollback() {
-            echo 'Deployment health check failed; restoring previous release.' >&2
-            rm -f "$NEXT_LINK"
-            ln -s "$PREVIOUS" "$NEXT_LINK"
-            mv -Tf "$NEXT_LINK" "$CURRENT"
-            cd /docker/website
-            docker compose up -d --no-build --pull never --force-recreate portfolio || true
-            docker logs --tail 80 website-portfolio-1 || true
-          }
-
-          rm -f "$NEXT_LINK"
-          ln -s "$RELEASE" "$NEXT_LINK"
-          mv -Tf "$NEXT_LINK" "$CURRENT"
-
-          cd /docker/website
-          if ! docker compose up -d --no-build --pull never --force-recreate portfolio; then
-            rollback
-            exit 1
-          fi
-
-          HEALTH=''
-          for attempt in $(seq 1 30); do
-            HEALTH="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' website-portfolio-1 2>/dev/null || true)"
-            if [ "$HEALTH" = 'healthy' ]; then
-              break
-            fi
-            sleep 2
-          done
-
-          if [ "$HEALTH" != 'healthy' ]; then
-            rollback
-            exit 1
-          fi
-
-          rm -f "$ARCHIVE"
-          echo "Deployment successful: $RELEASE_ID"
-          REMOTE_SCRIPT
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
